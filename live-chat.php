@@ -369,6 +369,32 @@
     color: white;
 }
 
+/* Category browser */
+.category-browse {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0;
+}
+
+.category-chip {
+    background: white;
+    border: 1px solid var(--chat-border);
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--chat-text);
+    margin: 2px;
+}
+
+.category-chip:hover {
+    border-color: var(--chat-primary);
+    background: var(--chat-primary);
+    color: white;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
     .chat-panel {
@@ -496,6 +522,8 @@ class MorwebSupportChat {
         this.feedbackAttempts = 0;
         this.lastSearchResults = [];
         this.supportArticles = [];
+        this.allKeywords = new Set();
+        this.allCategories = new Set();
         
         // Enhanced search configuration
         this.searchConfig = {
@@ -1345,6 +1373,16 @@ class MorwebSupportChat {
             searchText: this.createSearchText(article),
             keywordSet: new Set(article.keywords.map(k => k.toLowerCase()))
         }));
+
+        // Build keyword and category indexes
+        this.allKeywords = new Set();
+        this.allCategories = new Set();
+        this.supportArticles.forEach(article => {
+            article.keywords.forEach(k => this.allKeywords.add(k.toLowerCase()));
+            if (article.category) {
+                this.allCategories.add(article.category);
+            }
+        });
         
         this.isLoaded = true;
         this.updateStatus(`${this.supportArticles.length} support articles loaded`, 'success');
@@ -1489,6 +1527,50 @@ class MorwebSupportChat {
         }
         return matrix[b.length][a.length];
     }
+
+    suggestKeywords(query) {
+        const words = this.preprocessQuery(query);
+        const suggestions = new Set();
+
+        for (const kw of this.allKeywords) {
+            for (const w of words) {
+                if (kw.includes(w) || this.fuzzyMatch(w, kw)) {
+                    suggestions.add(kw);
+                }
+            }
+            if (suggestions.size >= 5) break;
+        }
+
+        return Array.from(suggestions).slice(0, 5);
+    }
+
+    showCategoryBrowser() {
+        if (this.allCategories.size === 0) return;
+        const categories = Array.from(this.allCategories).sort();
+        const html = `<div class="category-browse">` +
+            categories.map(c => `<div class="category-chip" data-cat="${c}" role="button" tabindex="0">${c}</div>`).join('') +
+            `</div>`;
+        const messageElement = this.addMessage(html, 'bot', true);
+
+        messageElement.querySelectorAll('.category-chip').forEach(item => {
+            const cat = item.getAttribute('data-cat');
+            const open = () => {
+                const results = this.searchArticles(cat);
+                if (results.length === 0) {
+                    this.addMessage('No articles found in this category yet.', 'bot');
+                } else {
+                    this.displaySearchResults(results, cat);
+                }
+            };
+            item.addEventListener('click', open);
+            item.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    open();
+                }
+            });
+        });
+    }
     
     handleSubmit(e) {
         e.preventDefault();
@@ -1567,26 +1649,33 @@ class MorwebSupportChat {
     
     handleNoResults(query) {
         const suggestions = [
-            "I couldn't find specific articles for that. Try searching for topics like 'setup', 'troubleshooting', 'user management', or 'content editing'.",
-            "No exact matches found. You might want to try different keywords or browse our popular articles.",
-            "I don't see articles matching that exactly. Could you try rephrasing or using different terms?"
+            "I couldn't find specific articles for that. Try using different keywords or explore our topics below.",
+            "No exact matches found. Maybe use similar terms or browse by category.",
+            "I don't see articles matching that exactly. Here are some other ways to search."
         ];
-        
+
         const response = suggestions[Math.floor(Math.random() * suggestions.length)];
         this.addMessage(response, 'bot');
-        
+
+        const keywordSuggestions = this.suggestKeywords(query);
+        if (keywordSuggestions.length > 0) {
+            this.addMessage(`You could try: ${keywordSuggestions.join(', ')}`, 'bot');
+        }
+
+        this.showCategoryBrowser();
+
         // Show popular articles as alternatives
         const popularArticles = this.supportArticles
             .sort((a, b) => b.popularity - a.popularity)
             .slice(0, 3);
-        
+
         if (popularArticles.length > 0) {
             setTimeout(() => {
                 this.addMessage("Here are some popular articles that might help:", 'bot');
                 this.displayArticleResults(popularArticles);
             }, 1000);
         }
-        
+
         this.trackEvent('no_results', { query });
     }
     
