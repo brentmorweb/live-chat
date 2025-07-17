@@ -422,6 +422,12 @@
     background: var(--chat-secondary);
 }
 
+.autocomplete-empty {
+    padding: 8px 12px;
+    color: var(--chat-text-light);
+    font-size: 13px;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
     .chat-panel {
@@ -717,12 +723,16 @@ class MorwebSupportChat {
         }
 
         if (query.length < this.searchConfig.minQueryLength) {
-            if (query.length === 0 && this.searchHistory.length > 0) {
-                this.elements.autocompleteList.innerHTML = this.searchHistory
-                    .slice()
-                    .reverse()
-                    .map(q => `<li class="autocomplete-item" data-title="${q}">${q}</li>`)
-                    .join('');
+            if (query.length === 0) {
+                if (this.searchHistory.length > 0) {
+                    this.elements.autocompleteList.innerHTML = this.searchHistory
+                        .slice()
+                        .reverse()
+                        .map(q => `<li class="autocomplete-item" data-title="${q}">${q}</li>`)
+                        .join('');
+                } else {
+                    this.elements.autocompleteList.innerHTML = '<li class="autocomplete-empty">No recent searches</li>';
+                }
                 this.elements.autocompleteList.style.display = 'block';
             } else {
                 this.hideAutocomplete();
@@ -732,7 +742,8 @@ class MorwebSupportChat {
 
         const results = this.searchArticles(query, 5);
         if (results.length === 0) {
-            this.hideAutocomplete();
+            this.elements.autocompleteList.innerHTML = '<li class="autocomplete-empty">No suggestions found</li>';
+            this.elements.autocompleteList.style.display = 'block';
             return;
         }
 
@@ -1509,12 +1520,16 @@ class MorwebSupportChat {
         });
 
         this.categories = Array.from(new Set(this.categories));
-        
+
         this.isLoaded = true;
-        this.updateStatus(`${this.supportArticles.length} support articles loaded`, 'success');
-        this.hideStatusAfterDelay();
-        
-        this.trackEvent('articles_loaded', { count: this.supportArticles.length });
+        if (this.supportArticles.length === 0) {
+            this.updateStatus('No support articles available.', 'error');
+            this.trackEvent('no_articles');
+        } else {
+            this.updateStatus(`${this.supportArticles.length} support articles loaded`, 'success');
+            this.hideStatusAfterDelay();
+            this.trackEvent('articles_loaded', { count: this.supportArticles.length });
+        }
     }
     
     createSearchText(article) {
