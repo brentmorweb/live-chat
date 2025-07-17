@@ -527,12 +527,14 @@ class MorwebSupportChat {
         this.feedbackAttempts = 0;
         this.lastSearchResults = [];
         this.supportArticles = [];
+        this.allKeywords = new Set();
         
         // Enhanced search configuration
         this.searchConfig = {
             minQueryLength: 2,
             maxResults: 3,
-            fuzzyThreshold: 0.6,
+            // Percentage of word length allowed as edit distance for fuzzy matches
+            fuzzyThreshold: 0.4,
             stopWords: new Set([
                 'the', 'a', 'an', 'to', 'of', 'and', 'for', 'in', 'on', 'at', 'with',
                 'how', 'what', 'where', 'when', 'why', 'which', 'who', 'can', 'could',
@@ -1420,6 +1422,10 @@ class MorwebSupportChat {
             searchText: this.createSearchText(article),
             keywordSet: new Set(article.keywords.map(k => k.toLowerCase()))
         }));
+
+        this.supportArticles.forEach(article => {
+            article.keywordSet.forEach(k => this.allKeywords.add(k));
+        });
         
         this.isLoaded = true;
         this.updateStatus(`${this.supportArticles.length} support articles loaded`, 'success');
@@ -1476,13 +1482,15 @@ class MorwebSupportChat {
     }
     
     preprocessQuery(query) {
-        return query.toLowerCase()
+        const words = query.toLowerCase()
             .replace(/[^\w\s]/g, ' ')
             .split(/\s+/)
-            .filter(word => 
-                word.length > 2 && 
+            .filter(word =>
+                word.length > 2 &&
                 !this.searchConfig.stopWords.has(word)
             );
+
+        return this.correctTypos(words);
     }
     
     calculateRelevanceScore(article, queryWords, originalQuery) {
@@ -1543,8 +1551,8 @@ class MorwebSupportChat {
         if (word1 === word2) return true;
         if (Math.abs(word1.length - word2.length) > 2) return false;
         
-        // Simple edit distance check
-        const maxDistance = Math.floor(Math.max(word1.length, word2.length) * 0.3);
+        // Simple edit distance check with configurable threshold
+        const maxDistance = Math.floor(Math.max(word1.length, word2.length) * this.searchConfig.fuzzyThreshold);
         return this.editDistance(word1, word2) <= maxDistance;
     }
     
@@ -1570,6 +1578,24 @@ class MorwebSupportChat {
             }
         }
         return matrix[b.length][a.length];
+    }
+
+    correctTypos(words) {
+        return words.map(word => {
+            if (this.allKeywords.has(word)) return word;
+
+            let closest = word;
+            let closestDistance = Infinity;
+            for (const keyword of this.allKeywords) {
+                const dist = this.editDistance(word, keyword);
+                if (dist < closestDistance && dist <= 2) {
+                    closest = keyword;
+                    closestDistance = dist;
+                    if (dist === 1) break;
+                }
+            }
+            return closest;
+        });
     }
     
     handleSubmit(e) {
