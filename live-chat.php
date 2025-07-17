@@ -369,6 +369,29 @@
     color: white;
 }
 
+/* Quick actions */
+.quick-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin: 8px 0;
+}
+
+.quick-action {
+    background: var(--chat-primary);
+    border: none;
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.quick-action:hover {
+    background: var(--chat-primary-hover);
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
     .chat-panel {
@@ -471,6 +494,12 @@
             <div class="status-message">Loading support articles...</div>
         </div>
 
+        <div class="quick-actions">
+            <button class="quick-action" data-action="start-over">Start over</button>
+            <button class="quick-action" data-action="previous-search">Previous search</button>
+            <button class="quick-action" data-action="popular-articles">Popular articles</button>
+        </div>
+
         <!-- Input -->
         <div class="chat-input">
             <form class="input-container" autocomplete="off">
@@ -495,6 +524,8 @@ class MorwebSupportChat {
         this.awaitingFeedback = false;
         this.feedbackAttempts = 0;
         this.lastSearchResults = [];
+        this.lastSearchQuery = '';
+        this.initialMessagesHTML = '';
         this.supportArticles = [];
         
         // Enhanced search configuration
@@ -553,6 +584,7 @@ class MorwebSupportChat {
     
     init() {
         this.cacheElements();
+        this.initialMessagesHTML = this.elements.messages.innerHTML;
         this.bindEvents();
         this.loadSupportData();
     }
@@ -567,7 +599,8 @@ class MorwebSupportChat {
             sendButton: this.widget.querySelector('.send-button'),
             form: this.widget.querySelector('.input-container'),
             statusMessage: this.widget.querySelector('.status-message'),
-            suggestions: this.widget.querySelectorAll('.suggestion-chip')
+            suggestions: this.widget.querySelectorAll('.suggestion-chip'),
+            quickActions: this.widget.querySelectorAll('.quick-action')
         };
     }
     
@@ -579,14 +612,9 @@ class MorwebSupportChat {
         // Form submission
         this.elements.form.addEventListener('submit', (e) => this.handleSubmit(e));
         
-        // Quick suggestions
-        this.elements.suggestions.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const suggestion = e.target.dataset.suggestion;
-                this.elements.input.value = suggestion;
-                this.handleSubmit(new Event('submit'));
-            });
-        });
+        // Quick suggestions and actions
+        this.bindSuggestionEvents();
+        this.bindQuickActionEvents();
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -597,6 +625,74 @@ class MorwebSupportChat {
         
         // Auto-resize input
         this.elements.input.addEventListener('input', () => this.adjustInputHeight());
+    }
+
+    bindSuggestionEvents() {
+        this.elements.suggestions.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const suggestion = e.target.dataset.suggestion;
+                this.elements.input.value = suggestion;
+                this.handleSubmit(new Event('submit'));
+            });
+        });
+    }
+
+    bindQuickActionEvents() {
+        this.elements.quickActions.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = e.target.dataset.action;
+                this.handleQuickAction(action);
+            });
+        });
+    }
+
+    handleQuickAction(action) {
+        switch (action) {
+            case 'start-over':
+                this.startOver();
+                break;
+            case 'previous-search':
+                this.showPreviousSearch();
+                break;
+            case 'popular-articles':
+                this.showPopularArticles();
+                break;
+        }
+    }
+
+    startOver() {
+        this.elements.messages.innerHTML = this.initialMessagesHTML;
+        this.lastSearchResults = [];
+        this.lastSearchQuery = '';
+        this.awaitingFeedback = false;
+        this.feedbackAttempts = 0;
+        this.cacheElements();
+        this.bindSuggestionEvents();
+        this.bindQuickActionEvents();
+        this.elements.statusMessage.style.display = 'none';
+        this.scrollToBottom();
+    }
+
+    showPreviousSearch() {
+        if (this.lastSearchResults.length === 0) {
+            this.addMessage('No previous search available.', 'bot');
+            return;
+        }
+        this.addMessage(`Here are your previous results for "${this.lastSearchQuery}":`, 'bot');
+        this.displayArticleResults(this.lastSearchResults);
+    }
+
+    showPopularArticles() {
+        const popular = this.supportArticles
+            .slice()
+            .sort((a, b) => b.popularity - a.popularity)
+            .slice(0, 3);
+        if (popular.length === 0) {
+            this.addMessage('No articles available yet.', 'bot');
+            return;
+        }
+        this.addMessage('Here are some popular articles:', 'bot');
+        this.displayArticleResults(popular);
     }
     
     toggleChat() {
@@ -1495,8 +1591,9 @@ class MorwebSupportChat {
         
         const query = this.elements.input.value.trim();
         if (!query) return;
-        
+
         this.addMessage(query, 'user');
+        this.lastSearchQuery = query;
         this.elements.input.value = '';
         this.adjustInputHeight();
         
