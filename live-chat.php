@@ -553,6 +553,7 @@ class MorwebSupportChat {
         this.historyIndex = -1;
         this.supportArticles = [];
         this.allKeywords = new Set();
+        this.categories = [];
         
         // Enhanced search configuration
         this.searchConfig = {
@@ -1495,7 +1496,12 @@ class MorwebSupportChat {
 
         this.supportArticles.forEach(article => {
             article.keywordSet.forEach(k => this.allKeywords.add(k));
+            if (article.category) {
+                this.categories.push(article.category);
+            }
         });
+
+        this.categories = Array.from(new Set(this.categories));
         
         this.isLoaded = true;
         this.updateStatus(`${this.supportArticles.length} support articles loaded`, 'success');
@@ -1667,6 +1673,22 @@ class MorwebSupportChat {
             return closest;
         });
     }
+
+    getKeywordSuggestions(query, limit = 5) {
+        const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+        const suggestions = new Set();
+        this.correctTypos(words).forEach(w => suggestions.add(w));
+        for (const word of words) {
+            for (const keyword of this.allKeywords) {
+                if ((keyword.includes(word) || this.editDistance(word, keyword) <= 2) && !suggestions.has(keyword)) {
+                    suggestions.add(keyword);
+                    if (suggestions.size >= limit) break;
+                }
+            }
+            if (suggestions.size >= limit) break;
+        }
+        return Array.from(suggestions).slice(0, limit);
+    }
     
     handleSubmit(e) {
         e.preventDefault();
@@ -1752,10 +1774,36 @@ class MorwebSupportChat {
             "No exact matches found. You might want to try different keywords or browse our popular articles.",
             "I don't see articles matching that exactly. Could you try rephrasing or using different terms?"
         ];
-        
+
         const response = suggestions[Math.floor(Math.random() * suggestions.length)];
         this.addMessage(response, 'bot');
-        
+
+        // Suggest alternative keywords
+        const altKeywords = this.getKeywordSuggestions(query);
+        if (altKeywords.length > 0) {
+            const chips = altKeywords.map(k => `<button class="suggestion-chip keyword-suggestion" data-suggestion="${k}">${k}</button>`).join('');
+            const msg = this.addMessage(`<div class="quick-suggestions">${chips}</div>`, 'bot', true);
+            msg.querySelectorAll('.keyword-suggestion').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    this.elements.input.value = e.target.dataset.suggestion;
+                    this.handleSubmit(new Event('submit'));
+                });
+            });
+        }
+
+        // Offer category browsing
+        if (this.categories.length > 0) {
+            this.addMessage('You can also browse by category:', 'bot');
+            const catChips = this.categories.map(c => `<button class="suggestion-chip category-suggestion" data-suggestion="${c}">${c}</button>`).join('');
+            const catMsg = this.addMessage(`<div class="quick-suggestions">${catChips}</div>`, 'bot', true);
+            catMsg.querySelectorAll('.category-suggestion').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    this.elements.input.value = e.target.dataset.suggestion;
+                    this.handleSubmit(new Event('submit'));
+                });
+            });
+        }
+
         // Show popular articles as alternatives
         const popularArticles = this.supportArticles
             .sort((a, b) => b.popularity - a.popularity)
