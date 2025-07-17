@@ -1625,13 +1625,6 @@ class MorwebSupportChat {
         return results;
     }
 
-    getRelatedArticles(query, currentResults, limit = 3) {
-        const additional = this.searchArticles(query, currentResults.length + limit)
-            .filter(r => !currentResults.some(cr => cr.url === r.url))
-            .slice(0, limit);
-        return additional;
-    }
-    
     preprocessQuery(query) {
         const words = query.toLowerCase()
             .replace(/[^\w\s]/g, ' ')
@@ -1906,15 +1899,7 @@ class MorwebSupportChat {
         
         setTimeout(() => {
             this.displayArticleResults(results);
-
-            const related = this.getRelatedArticles(query, results);
-            if (related.length > 0) {
-                this.addMessage('You might also like:', 'bot');
-                this.displayArticleResults(related);
-                this.lastSearchResults = [...results, ...related];
-            } else {
-                this.lastSearchResults = results;
-            }
+            this.lastSearchResults = results;
         }, 500);
     }
     
