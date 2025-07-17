@@ -276,6 +276,11 @@
     color: #dc2626;
 }
 
+.status-message.empty {
+    background: rgba(100, 116, 139, 0.05);
+    color: var(--chat-text-light);
+}
+
 /* Chat input */
 .chat-input {
     background: white;
@@ -1345,11 +1350,22 @@ class MorwebSupportChat {
             searchText: this.createSearchText(article),
             keywordSet: new Set(article.keywords.map(k => k.toLowerCase()))
         }));
-        
+
         this.isLoaded = true;
+
+        if (this.supportArticles.length === 0) {
+            this.updateStatus('No support articles available', 'empty');
+            this.addMessage(
+                'Sorry, there are no support articles available right now. Please contact your Project Coordinator for assistance.',
+                'bot'
+            );
+            this.trackEvent('articles_empty');
+            return;
+        }
+
         this.updateStatus(`${this.supportArticles.length} support articles loaded`, 'success');
         this.hideStatusAfterDelay();
-        
+
         this.trackEvent('articles_loaded', { count: this.supportArticles.length });
     }
     
