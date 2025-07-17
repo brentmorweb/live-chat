@@ -520,6 +520,7 @@
                 <button class="suggestion-chip" data-suggestion="How to create blog posts">Create blog post</button>
                 <button class="suggestion-chip" data-suggestion="How to connect Google Analytics">Google Analytics</button>
                 <button class="suggestion-chip" data-suggestion="How to optimize for SEO">SEO optimization</button>
+                <button class="suggestion-chip" data-action="browse-categories">Browse categories</button>
             </div>
             <div class="status-message">Loading support articles...</div>
         </div>
@@ -639,12 +640,18 @@ class MorwebSupportChat {
         // Form submission
         this.elements.form.addEventListener('submit', (e) => this.handleSubmit(e));
         
-        // Quick suggestions
+        // Quick suggestions and actions
         this.elements.suggestions.forEach(btn => {
             btn.addEventListener('click', (e) => {
+                if (e.target.dataset.action === 'browse-categories') {
+                    this.showCategoryBrowser();
+                    return;
+                }
                 const suggestion = e.target.dataset.suggestion;
-                this.elements.input.value = suggestion;
-                this.handleSubmit(new Event('submit'));
+                if (suggestion) {
+                    this.elements.input.value = suggestion;
+                    this.handleSubmit(new Event('submit'));
+                }
             });
         });
         
@@ -1983,6 +1990,38 @@ class MorwebSupportChat {
         this.addMessage("I understand the articles I found aren't quite what you're looking for. For more personalized assistance with your specific situation, I'd recommend reaching out to your Project Coordinator. They'll be able to provide you with direct support and help resolve your question more effectively.", 'bot');
         this.feedbackAttempts = 0;
         this.trackEvent('escalated_to_support');
+    }
+
+    showCategoryBrowser() {
+        if (!this.isLoaded || this.categories.length === 0) return;
+        this.addMessage('Browse topics by category:', 'bot');
+        const chips = this.categories
+            .map(c => `<button class="suggestion-chip category-choice" data-category="${c}">${c}</button>`)
+            .join('');
+        const msg = this.addMessage(`<div class="quick-suggestions">${chips}</div>`, 'bot', true);
+        msg.querySelectorAll('.category-choice').forEach(btn => {
+            btn.addEventListener('click', e => {
+                const cat = e.target.dataset.category;
+                this.showArticlesForCategory(cat);
+            });
+        });
+        this.trackEvent('browse_categories_shown');
+    }
+
+    showArticlesForCategory(category) {
+        const results = this.supportArticles
+            .filter(a => a.category === category)
+            .sort((a, b) => b.popularity - a.popularity)
+            .slice(0, 5);
+
+        if (results.length) {
+            this.addMessage(`Top articles in ${category}:`, 'bot');
+            this.displayArticleResults(results);
+            this.lastSearchResults = results;
+            this.trackEvent('category_selected', { category, results: results.length });
+        } else {
+            this.addMessage(`No articles found in ${category}.`, 'bot');
+        }
     }
     
     addMessage(content, sender = 'bot', isHTML = false) {
