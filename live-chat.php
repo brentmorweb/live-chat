@@ -556,6 +556,7 @@
                 <button class="action-chip" data-action="start-over">Start over</button>
                 <button class="action-chip" data-action="previous-search">Previous search</button>
                 <button class="action-chip" data-action="popular-articles">Popular articles</button>
+                <button class="action-chip" data-action="contact-support">Contact support</button>
             </div>
         </div>
 
@@ -739,6 +740,8 @@ class MorwebSupportChat {
                     this.showPreviousSearch();
                 } else if (action === 'popular-articles') {
                     this.showPopularArticles();
+                } else if (action === 'contact-support') {
+                    this.escalateToSupport();
                 }
             });
         });
