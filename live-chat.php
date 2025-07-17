@@ -549,6 +549,8 @@ class MorwebSupportChat {
         this.awaitingFeedback = false;
         this.feedbackAttempts = 0;
         this.lastSearchResults = [];
+        this.searchHistory = [];
+        this.historyIndex = -1;
         this.supportArticles = [];
         this.allKeywords = new Set();
         
@@ -658,6 +660,10 @@ class MorwebSupportChat {
             this.handleAutocomplete();
         });
 
+        this.elements.input.addEventListener('keydown', (e) => {
+            this.handleHistoryNavigation(e);
+        });
+
         // Hide autocomplete on focus out
         this.elements.input.addEventListener('blur', () => {
             setTimeout(() => this.hideAutocomplete(), 100);
@@ -697,8 +703,22 @@ class MorwebSupportChat {
     handleAutocomplete() {
         const query = this.elements.input.value.trim();
 
-        if (!this.isLoaded || query.length < this.searchConfig.minQueryLength) {
+        if (!this.isLoaded) {
             this.hideAutocomplete();
+            return;
+        }
+
+        if (query.length < this.searchConfig.minQueryLength) {
+            if (query.length === 0 && this.searchHistory.length > 0) {
+                this.elements.autocompleteList.innerHTML = this.searchHistory
+                    .slice()
+                    .reverse()
+                    .map(q => `<li class="autocomplete-item" data-title="${q}">${q}</li>`)
+                    .join('');
+                this.elements.autocompleteList.style.display = 'block';
+            } else {
+                this.hideAutocomplete();
+            }
             return;
         }
 
@@ -717,6 +737,33 @@ class MorwebSupportChat {
     hideAutocomplete() {
         this.elements.autocompleteList.style.display = 'none';
         this.elements.autocompleteList.innerHTML = '';
+    }
+
+    handleHistoryNavigation(e) {
+        if (e.key === 'ArrowUp') {
+            if (this.searchHistory.length === 0) return;
+            e.preventDefault();
+            if (this.historyIndex < 0) {
+                this.historyIndex = this.searchHistory.length - 1;
+            } else if (this.historyIndex > 0) {
+                this.historyIndex--;
+            }
+            this.elements.input.value = this.searchHistory[this.historyIndex] || '';
+            this.adjustInputHeight();
+            this.handleAutocomplete();
+        } else if (e.key === 'ArrowDown') {
+            if (this.searchHistory.length === 0 || this.historyIndex < 0) return;
+            e.preventDefault();
+            if (this.historyIndex < this.searchHistory.length - 1) {
+                this.historyIndex++;
+                this.elements.input.value = this.searchHistory[this.historyIndex];
+            } else {
+                this.historyIndex = -1;
+                this.elements.input.value = '';
+            }
+            this.adjustInputHeight();
+            this.handleAutocomplete();
+        }
     }
     
     loadSupportData() {
@@ -1672,6 +1719,7 @@ class MorwebSupportChat {
     }
     
     performSearch(query) {
+        this.addSearchHistory(query);
         this.showTypingIndicator();
         this.elements.sendButton.disabled = true;
         
@@ -1947,7 +1995,17 @@ class MorwebSupportChat {
             this.elements.statusMessage.style.display = 'none';
         }, delay);
     }
-    
+
+    addSearchHistory(query) {
+        if (!query) return;
+        this.searchHistory = this.searchHistory.filter(q => q !== query);
+        this.searchHistory.push(query);
+        if (this.searchHistory.length > 10) {
+            this.searchHistory.shift();
+        }
+        this.historyIndex = -1;
+    }
+
     scrollToBottom() {
         this.elements.messages.scrollTop = this.elements.messages.scrollHeight;
     }
