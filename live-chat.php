@@ -281,6 +281,7 @@
     background: white;
     border-top: 1px solid var(--chat-border);
     padding: 20px;
+    position: relative;
 }
 
 .input-container {
@@ -367,6 +368,35 @@
     border-color: var(--chat-primary);
     background: var(--chat-primary);
     color: white;
+}
+
+/* Autocomplete suggestions */
+.autocomplete-list {
+    position: absolute;
+    bottom: 60px;
+    left: 20px;
+    right: 60px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: white;
+    border: 1px solid var(--chat-border);
+    border-radius: 4px;
+    box-shadow: var(--chat-shadow);
+    max-height: 150px;
+    overflow-y: auto;
+    display: none;
+    z-index: 10;
+}
+
+.autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.autocomplete-item:hover {
+    background: var(--chat-secondary);
 }
 
 /* Mobile responsiveness */
@@ -481,6 +511,7 @@
                     </svg>
                 </button>
             </form>
+            <ul class="autocomplete-list" aria-label="Search suggestions"></ul>
         </div>
     </div>
 </div>
@@ -567,7 +598,8 @@ class MorwebSupportChat {
             sendButton: this.widget.querySelector('.send-button'),
             form: this.widget.querySelector('.input-container'),
             statusMessage: this.widget.querySelector('.status-message'),
-            suggestions: this.widget.querySelectorAll('.suggestion-chip')
+            suggestions: this.widget.querySelectorAll('.suggestion-chip'),
+            autocompleteList: this.widget.querySelector('.autocomplete-list')
         };
     }
     
@@ -595,8 +627,26 @@ class MorwebSupportChat {
             }
         });
         
-        // Auto-resize input
-        this.elements.input.addEventListener('input', () => this.adjustInputHeight());
+        // Auto-resize input and autocomplete suggestions
+        this.elements.input.addEventListener('input', () => {
+            this.adjustInputHeight();
+            this.handleAutocomplete();
+        });
+
+        // Hide autocomplete on focus out
+        this.elements.input.addEventListener('blur', () => {
+            setTimeout(() => this.hideAutocomplete(), 100);
+        });
+
+        // Autocomplete item click
+        this.elements.autocompleteList.addEventListener('click', (e) => {
+            const item = e.target.closest('.autocomplete-item');
+            if (item) {
+                this.elements.input.value = item.dataset.title;
+                this.hideAutocomplete();
+                this.elements.input.focus();
+            }
+        });
     }
     
     toggleChat() {
@@ -617,6 +667,31 @@ class MorwebSupportChat {
         const input = this.elements.input;
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    }
+
+    handleAutocomplete() {
+        const query = this.elements.input.value.trim();
+
+        if (!this.isLoaded || query.length < this.searchConfig.minQueryLength) {
+            this.hideAutocomplete();
+            return;
+        }
+
+        const results = this.searchArticles(query, 5);
+        if (results.length === 0) {
+            this.hideAutocomplete();
+            return;
+        }
+
+        this.elements.autocompleteList.innerHTML = results
+            .map(r => `<li class="autocomplete-item" data-title="${r.title}">${r.title}</li>`)
+            .join('');
+        this.elements.autocompleteList.style.display = 'block';
+    }
+
+    hideAutocomplete() {
+        this.elements.autocompleteList.style.display = 'none';
+        this.elements.autocompleteList.innerHTML = '';
     }
     
     loadSupportData() {
@@ -1492,7 +1567,9 @@ class MorwebSupportChat {
     
     handleSubmit(e) {
         e.preventDefault();
-        
+
+        this.hideAutocomplete();
+
         const query = this.elements.input.value.trim();
         if (!query) return;
         
