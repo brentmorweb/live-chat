@@ -254,6 +254,29 @@
     opacity: 1;
 }
 
+/* Email link within result item */
+.email-link {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+}
+
+.email-link svg {
+    width: 16px;
+    height: 16px;
+    fill: var(--chat-primary);
+    transition: fill 0.2s ease;
+}
+
+.email-link:hover svg,
+.email-link:focus svg {
+    fill: var(--chat-primary-hover);
+}
+
 /* Status indicators */
 .status-message {
     text-align: center;
@@ -1611,6 +1634,11 @@ class MorwebSupportChat {
                 <div class="result-title">${result.title}</div>
                 <div class="result-url">${result.url}</div>
                 ${result.category ? `<div style="font-size: 11px; color: var(--chat-text-light); margin-top: 4px;">${result.category}</div>` : ''}
+                <button class="email-link" data-url="${result.url}" data-title="${result.title}" aria-label="Email article link" title="Email article link">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 4h16v16H4V4zm8 8l8-5H4l8 5z"/>
+                    </svg>
+                </button>
             </div>
         `).join('');
         
@@ -1655,6 +1683,21 @@ class MorwebSupportChat {
                     openLink(e);
                 }
             });
+
+            const emailBtn = item.querySelector('.email-link');
+            if (emailBtn) {
+                emailBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const title = emailBtn.getAttribute('data-title');
+                    const subject = encodeURIComponent('Helpful article from Morweb Support');
+                    const body = encodeURIComponent(`${title}\n${url}`);
+                    const mailto = `mailto:?subject=${subject}&body=${body}`;
+                    window.open(mailto, '_blank');
+                    this.trackEvent('article_emailed', { url, title });
+                });
+            }
         });
     }
     
