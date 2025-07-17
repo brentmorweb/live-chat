@@ -369,6 +369,31 @@
     color: white;
 }
 
+/* Category chips for browsing topics */
+.category-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.category-chip {
+    background: white;
+    border: 1px solid var(--chat-border);
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--chat-text);
+}
+
+.category-chip:hover {
+    border-color: var(--chat-primary);
+    background: var(--chat-primary);
+    color: white;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
     .chat-panel {
@@ -467,6 +492,7 @@
                 <button class="suggestion-chip" data-suggestion="How to create blog posts">Create blog post</button>
                 <button class="suggestion-chip" data-suggestion="How to connect Google Analytics">Google Analytics</button>
                 <button class="suggestion-chip" data-suggestion="How to optimize for SEO">SEO optimization</button>
+                <button id="browse-categories" class="suggestion-chip">Browse topics</button>
             </div>
             <div class="status-message">Loading support articles...</div>
         </div>
@@ -496,6 +522,7 @@ class MorwebSupportChat {
         this.feedbackAttempts = 0;
         this.lastSearchResults = [];
         this.supportArticles = [];
+        this.categories = [];
         
         // Enhanced search configuration
         this.searchConfig = {
@@ -567,7 +594,8 @@ class MorwebSupportChat {
             sendButton: this.widget.querySelector('.send-button'),
             form: this.widget.querySelector('.input-container'),
             statusMessage: this.widget.querySelector('.status-message'),
-            suggestions: this.widget.querySelectorAll('.suggestion-chip')
+            suggestions: this.widget.querySelectorAll('.suggestion-chip'),
+            browseButton: this.widget.querySelector('#browse-categories')
         };
     }
     
@@ -587,6 +615,12 @@ class MorwebSupportChat {
                 this.handleSubmit(new Event('submit'));
             });
         });
+
+        if (this.elements.browseButton) {
+            this.elements.browseButton.addEventListener('click', () => {
+                this.displayCategories();
+            });
+        }
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -1345,6 +1379,10 @@ class MorwebSupportChat {
             searchText: this.createSearchText(article),
             keywordSet: new Set(article.keywords.map(k => k.toLowerCase()))
         }));
+
+        this.categories = [...new Set(this.supportArticles.map(a => a.category))]
+            .filter(Boolean)
+            .sort();
         
         this.isLoaded = true;
         this.updateStatus(`${this.supportArticles.length} support articles loaded`, 'success');
@@ -1657,7 +1695,35 @@ class MorwebSupportChat {
             });
         });
     }
-    
+
+    displayCategories() {
+        if (!this.isLoaded) {
+            this.addMessage("I'm still loading the support articles. Please wait a moment and try again.", 'bot');
+            return;
+        }
+        if (!this.categories.length) return;
+        const listHTML = this.categories.map(cat => `
+            <button class="category-chip" data-category="${cat}">${cat}</button>
+        `).join('');
+        const msg = this.addMessage(`<div class="category-list">${listHTML}</div>`, 'bot', true);
+        msg.querySelectorAll('.category-chip').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.displayArticlesByCategory(btn.dataset.category);
+            });
+        });
+    }
+
+    displayArticlesByCategory(category) {
+        const articles = this.supportArticles.filter(a => a.category === category);
+        if (articles.length === 0) {
+            this.addMessage(`No articles found for ${category}.`, 'bot');
+            return;
+        }
+        this.addMessage(`Popular articles in ${category}:`, 'bot');
+        const sorted = articles.sort((a, b) => b.popularity - a.popularity).slice(0, this.searchConfig.maxResults);
+        this.displayArticleResults(sorted);
+    }
+
     isValidUrl(url) {
         try {
             new URL(url);
