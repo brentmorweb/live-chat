@@ -393,6 +393,30 @@
     color: white;
 }
 
+/* Quick actions */
+.quick-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.action-chip {
+    background: var(--chat-secondary);
+    border: 1px solid var(--chat-border);
+    border-radius: 16px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--chat-text);
+}
+
+.action-chip:hover {
+    background: var(--chat-primary);
+    border-color: var(--chat-primary);
+    color: white;
+}
+
 /* Autocomplete suggestions */
 .autocomplete-list {
     position: absolute;
@@ -535,6 +559,11 @@
                 </button>
             </form>
             <ul class="autocomplete-list" aria-label="Search suggestions"></ul>
+            <div class="quick-actions">
+                <button class="action-chip" data-action="start-over">Start over</button>
+                <button class="action-chip" data-action="previous-search">Previous search</button>
+                <button class="action-chip" data-action="popular-articles">Popular articles</button>
+            </div>
         </div>
     </div>
 </div>
@@ -553,6 +582,7 @@ class MorwebSupportChat {
         this.historyIndex = -1;
         this.supportArticles = [];
         this.allKeywords = new Set();
+        this.initialMessagesHTML = '';
         
         // Enhanced search configuration
         this.searchConfig = {
@@ -626,8 +656,13 @@ class MorwebSupportChat {
             form: this.widget.querySelector('.input-container'),
             statusMessage: this.widget.querySelector('.status-message'),
             suggestions: this.widget.querySelectorAll('.suggestion-chip'),
+            actions: this.widget.querySelectorAll('.action-chip'),
             autocompleteList: this.widget.querySelector('.autocomplete-list')
         };
+
+        if (!this.initialMessagesHTML) {
+            this.initialMessagesHTML = this.elements.messages.innerHTML;
+        }
     }
     
     bindEvents() {
@@ -639,13 +674,10 @@ class MorwebSupportChat {
         this.elements.form.addEventListener('submit', (e) => this.handleSubmit(e));
         
         // Quick suggestions
-        this.elements.suggestions.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const suggestion = e.target.dataset.suggestion;
-                this.elements.input.value = suggestion;
-                this.handleSubmit(new Event('submit'));
-            });
-        });
+        this.bindSuggestionEvents();
+
+        // Quick actions
+        this.bindActionEvents();
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -1935,6 +1967,69 @@ class MorwebSupportChat {
         this.addMessage("I understand the articles I found aren't quite what you're looking for. For more personalized assistance with your specific situation, I'd recommend reaching out to your Project Coordinator. They'll be able to provide you with direct support and help resolve your question more effectively.", 'bot');
         this.feedbackAttempts = 0;
         this.trackEvent('escalated_to_support');
+    }
+
+    bindSuggestionEvents() {
+        this.elements.suggestions.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const suggestion = e.target.dataset.suggestion;
+                this.elements.input.value = suggestion;
+                this.handleSubmit(new Event('submit'));
+            });
+        });
+    }
+
+    bindActionEvents() {
+        this.elements.actions.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = e.target.dataset.action;
+                this.trackEvent('quick_action', { action });
+                if (action === 'start-over') {
+                    this.startOver();
+                } else if (action === 'previous-search') {
+                    this.showPreviousSearch();
+                } else if (action === 'popular-articles') {
+                    this.showPopularArticles();
+                }
+            });
+        });
+    }
+
+    startOver() {
+        this.elements.messages.innerHTML = this.initialMessagesHTML;
+        this.cacheElements();
+        this.bindSuggestionEvents();
+        this.bindActionEvents();
+        this.searchHistory = [];
+        this.lastSearchResults = [];
+        this.historyIndex = -1;
+        this.awaitingFeedback = false;
+        this.feedbackAttempts = 0;
+        this.hideAutocomplete();
+        this.scrollToBottom();
+    }
+
+    showPreviousSearch() {
+        if (this.searchHistory.length === 0) {
+            this.addMessage('You have no previous searches.', 'bot');
+            return;
+        }
+        const lastQuery = this.searchHistory[this.searchHistory.length - 1];
+        this.addMessage(lastQuery, 'user');
+        this.performSearch(lastQuery);
+    }
+
+    showPopularArticles() {
+        if (!this.isLoaded) {
+            this.addMessage("I'm still loading the support articles. Please wait a moment and try again.", 'bot');
+            return;
+        }
+        const popular = this.supportArticles
+            .slice()
+            .sort((a, b) => b.popularity - a.popularity)
+            .slice(0, 3);
+        this.addMessage('Here are some popular articles:', 'bot');
+        this.displayArticleResults(popular);
     }
     
     addMessage(content, sender = 'bot', isHTML = false) {
