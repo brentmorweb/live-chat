@@ -352,6 +352,14 @@
     margin: 16px 0;
 }
 
+/* Recent search history */
+.search-history {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0 16px;
+}
+
 .suggestion-chip {
     background: white;
     border: 1px solid var(--chat-border);
@@ -468,6 +476,7 @@
                 <button class="suggestion-chip" data-suggestion="How to connect Google Analytics">Google Analytics</button>
                 <button class="suggestion-chip" data-suggestion="How to optimize for SEO">SEO optimization</button>
             </div>
+            <div class="search-history" style="display:none;"></div>
             <div class="status-message">Loading support articles...</div>
         </div>
 
@@ -496,6 +505,7 @@ class MorwebSupportChat {
         this.feedbackAttempts = 0;
         this.lastSearchResults = [];
         this.supportArticles = [];
+        this.searchHistory = JSON.parse(sessionStorage.getItem('mw_search_history') || '[]');
         
         // Enhanced search configuration
         this.searchConfig = {
@@ -554,6 +564,7 @@ class MorwebSupportChat {
     init() {
         this.cacheElements();
         this.bindEvents();
+        this.updateSearchHistory();
         this.loadSupportData();
     }
     
@@ -567,7 +578,8 @@ class MorwebSupportChat {
             sendButton: this.widget.querySelector('.send-button'),
             form: this.widget.querySelector('.input-container'),
             statusMessage: this.widget.querySelector('.status-message'),
-            suggestions: this.widget.querySelectorAll('.suggestion-chip')
+            suggestions: this.widget.querySelectorAll('.suggestion-chip'),
+            history: this.widget.querySelector('.search-history')
         };
     }
     
@@ -617,6 +629,50 @@ class MorwebSupportChat {
         const input = this.elements.input;
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    }
+
+    rememberSearch(query) {
+        const trimmed = query.trim();
+        if (!trimmed) return;
+
+        const index = this.searchHistory.indexOf(trimmed);
+        if (index !== -1) {
+            this.searchHistory.splice(index, 1);
+        }
+        this.searchHistory.unshift(trimmed);
+        this.searchHistory = this.searchHistory.slice(0, 5);
+        this.saveSearchHistory();
+        this.updateSearchHistory();
+    }
+
+    updateSearchHistory() {
+        const container = this.elements.history;
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        if (this.searchHistory.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        this.searchHistory.forEach(term => {
+            const btn = document.createElement('button');
+            btn.className = 'suggestion-chip history-chip';
+            btn.dataset.history = term;
+            btn.textContent = term;
+            btn.addEventListener('click', () => {
+                this.elements.input.value = term;
+                this.handleSubmit(new Event('submit'));
+            });
+            container.appendChild(btn);
+        });
+
+        container.style.display = 'flex';
+    }
+
+    saveSearchHistory() {
+        sessionStorage.setItem('mw_search_history', JSON.stringify(this.searchHistory));
     }
     
     loadSupportData() {
@@ -1539,6 +1595,7 @@ class MorwebSupportChat {
     }
     
     performSearch(query) {
+        this.rememberSearch(query);
         this.showTypingIndicator();
         this.elements.sendButton.disabled = true;
         
